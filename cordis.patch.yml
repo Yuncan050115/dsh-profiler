@@ -1,0 +1,10 @@
+# dsh-spark — bundle patch
+- insert:
+    - id: dsh-spark
+      name: dsh-spark
+      config:
+        enabled: true
+        sampleLimit: 800
+        slowToolMs: 3000
+        sessionScanTtlMs: 60000
+        http: true
