@@ -1,7 +1,7 @@
-# dsh-spark — bundle patch
+# dsh-profiler — bundle patch
 - insert:
-    - id: dsh-spark
-      name: dsh-spark
+    - id: dsh-profiler
+      name: dsh-profiler
       config:
         enabled: true
         sampleLimit: 800

@@ -1,5 +1,5 @@
 /**
- * dsh-spark edge test — 降级与脏数据场景（第 2 轮健壮性优化）。
+ * dsh-profiler edge test — 降级与脏数据场景（第 2 轮健壮性优化）。
  * 运行：node test/edge.mjs
  */
 import assert from 'node:assert/strict'
@@ -26,8 +26,8 @@ function makeCtx({ webServer = null } = {}) {
 {
   const { ctx, tools, commands } = makeCtx()
   assert.doesNotThrow(() => plugin.apply(ctx, {}))
-  assert.ok(tools.has('spark_report'))
-  assert.ok(commands.has('spark'))
+  assert.ok(tools.has('profiler_report'))
+  assert.ok(commands.has('profiler'))
 }
 
 // 2) enabled=false：完全不注册
@@ -49,7 +49,7 @@ function makeCtx({ webServer = null } = {}) {
     emit({ type: 'unknown/event', data: null })
     emit(null)
   })
-  const out = await tools.get('spark_report').execute({}, {})
+  const out = await tools.get('profiler_report').execute({}, {})
   assert.equal(out.data.tools.sampled, 0)
 }
 
@@ -57,9 +57,9 @@ function makeCtx({ webServer = null } = {}) {
 {
   const { ctx, tools } = makeCtx()
   plugin.apply(ctx, { sampleLimit: -5, slowToolMs: 'abc', sessionScanTtlMs: 1e12 })
-  const out = await tools.get('spark_report').execute({ scope: 'tools' }, {})
+  const out = await tools.get('profiler_report').execute({ scope: 'tools' }, {})
   assert.ok(Number.isFinite(out.data.tools.p95Ms))
   assert.ok(Number.isFinite(out.data.tools.avgMs))
 }
 
-console.log('✓ dsh-spark edge test passed (4 scenarios)')
+console.log('✓ dsh-profiler edge test passed (4 scenarios)')

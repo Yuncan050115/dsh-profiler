@@ -1,4 +1,4 @@
-# dsh-spark
+# dsh-profiler
 
 DeepSeek Harness 的运行时剖析器。对标 Minecraft 服务端的 **Spark**（性能剖析）与 **CoreProtect**（行为审计）——dsh 官方已有 compaction 与 session projection，但缺少「启动归因 / 工具耗时 / token 归因」这一层运维视角。
 
@@ -21,10 +21,10 @@ dsh plugin --profile desktop add link:<本目录>
 
 ## 使用
 
-- 命令：`/spark`、`/spark tools`、`/spark sessions`、`/spark plugins`、`/spark json`、`/spark export`
-- 工具：`spark_report`（Agent 可自行调用，支持 `scope` 切片）
-- HTTP：`/dsh-spark`（看板）、`/dsh-spark/report.json`（原始数据）
-- 导出：`/spark export` 写入 `$DSH_HOME/dsh-spark/report-*.json`
+- 命令：`/profiler`、`/profiler tools`、`/profiler sessions`、`/profiler plugins`、`/profiler json`、`/profiler export`
+- 工具：`profiler_report`（Agent 可自行调用，支持 `scope` 切片）
+- HTTP：`/dsh-profiler`（看板）、`/dsh-profiler/report.json`（原始数据）
+- 导出：`/profiler export` 写入 `$DSH_HOME/dsh-profiler/report-*.json`
 
 ## 实测基线（2026-10-23，Windows / 0.2.1-rc.2）
 

@@ -1,5 +1,5 @@
 /**
- * dsh-spark smoke test — 不启动 DSH，用假 ctx 验证插件契约：
+ * dsh-profiler smoke test — 不启动 DSH，用假 ctx 验证插件契约：
  *   register(tool) / register(command) / session/event 采样 / HTTP 路由 / 报告字段。
  * 运行：node test/smoke.mjs
  */
@@ -45,12 +45,12 @@ const fakeCtx = {
 
 plugin.apply(fakeCtx, { enabled: true, sampleLimit: 10, slowToolMs: 100, sessionScanTtlMs: 60000, http: true })
 
-assert.equal(plugin.name, 'dsh-spark')
+assert.equal(plugin.name, 'dsh-profiler')
 assert.ok(Array.isArray(plugin.inject) && plugin.inject.includes('tools'))
-assert.ok(tools.has('spark_report'), 'spark_report tool must be registered')
-assert.ok(commands.has('spark'), '/spark command must be registered')
-assert.ok(routes.has('/dsh-spark/report.json'), 'report route must be registered')
-assert.ok(routes.has('/dsh-spark'), 'dashboard route must be registered')
+assert.ok(tools.has('profiler_report'), 'profiler_report tool must be registered')
+assert.ok(commands.has('profiler'), '/profiler command must be registered')
+assert.ok(routes.has('/dsh-profiler/report.json'), 'report route must be registered')
+assert.ok(routes.has('/dsh-profiler'), 'dashboard route must be registered')
 
 // 模拟一次工具调用：120ms，超阈值
 const emit = (session, event) => (globalThis.__handlers['session/event'] || []).forEach((h) => h(session, event))
@@ -58,8 +58,8 @@ const session = { id: 'session-test' }
 emit(session, { type: 'tool/call', time: 1000, data: { callId: 'c1', name: 'read_file' } })
 emit(session, { type: 'tool/result', time: 1120, data: { message: { source: { callId: 'c1' }, isError: false } } })
 
-const toolResult = await tools.get('spark_report').execute({ scope: 'summary', limit: 3 }, {})
-assert.ok(toolResult.summary.includes('dsh-spark'))
+const toolResult = await tools.get('profiler_report').execute({ scope: 'summary', limit: 3 }, {})
+assert.ok(toolResult.summary.includes('dsh-profiler'))
 assert.ok(toolResult.summary.includes('工具'))
 assert.equal(toolResult.data.tools.sampled, 1)
 assert.equal(toolResult.data.tools.perTool[0].tool, 'read_file')
@@ -67,7 +67,7 @@ assert.equal(toolResult.data.tools.perTool[0].avgMs, 120)
 assert.ok(toolResult.data.findings.some((f) => f.code === 'tools/slow-p95'), 'slow p95 finding expected')
 
 // 命令
-const cmd = await commands.get('spark').handler({ rawInput: 'tools' })
+const cmd = await commands.get('profiler').handler({ rawInput: 'tools' })
 assert.equal(cmd.kind, 'success')
 assert.ok(cmd.text.includes('read_file'))
 
@@ -77,7 +77,7 @@ const res = {
   writeHead(code, headers) { this.statusCode = code; this.headers = headers },
   end(chunk) { this.body = chunk ? String(chunk) : '' }
 }
-await routes.get('/dsh-spark/report.json').handler({ method: 'GET', url: '/dsh-spark/report.json' }, res)
+await routes.get('/dsh-profiler/report.json').handler({ method: 'GET', url: '/dsh-profiler/report.json' }, res)
 assert.equal(res.statusCode, 200)
 const report = JSON.parse(res.body)
 assert.equal(report.version, '1.1.0')
@@ -88,7 +88,7 @@ assert.ok(Array.isArray(report.plugins.profiles) && report.plugins.profiles.leng
 assert.ok(Array.isArray(report.findings) && report.findings.length >= 1)
 
 // 导出命令
-const exported = await commands.get('spark').handler({ rawInput: 'export' })
+const exported = await commands.get('profiler').handler({ rawInput: 'export' })
 assert.equal(exported.kind, 'success')
 const exportedPath = exported.text.replace('已导出剖析报告：', '')
 assert.ok(fs.existsSync(exportedPath), 'export file must exist')
@@ -98,15 +98,15 @@ fs.unlinkSync(exportedPath)
 
 // 看板
 const htmlRes = { statusCode: 0, headers: {}, body: '', writeHead(c, h) { this.statusCode = c; this.headers = h }, end(c) { this.body = String(c || '') } }
-routes.get('/dsh-spark').handler({ method: 'GET', url: '/dsh-spark' }, htmlRes)
+routes.get('/dsh-profiler').handler({ method: 'GET', url: '/dsh-profiler' }, htmlRes)
 assert.equal(htmlRes.statusCode, 200)
-assert.ok(htmlRes.body.includes('DSH <b>SPARK</b>'))
+assert.ok(htmlRes.body.includes('DSH <b>PROFILER</b>'))
 
 disposers.forEach((d) => d())
 
-console.log('✓ dsh-spark smoke test passed')
-console.log('  tool   : spark_report')
-console.log('  command: /spark')
-console.log('  routes : /dsh-spark, /dsh-spark/report.json')
+console.log('✓ dsh-profiler smoke test passed')
+console.log('  tool   : profiler_report')
+console.log('  command: /profiler')
+console.log('  routes : /dsh-profiler, /dsh-profiler/report.json')
 console.log('  sample : read_file 120ms, p95', toolResult.data.tools.p95Ms + 'ms')
 console.log('  scans  : sessions=' + report.sessions.count + ', bundles=' + report.plugins.totalBundles)
