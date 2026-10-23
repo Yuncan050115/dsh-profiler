@@ -1,7 +1,7 @@
 {
   "name": "dsh-profiler",
-  "version": "1.1.0",
-  "description": "Agent 运行时剖析器：启动耗时归因、工具调用延迟采样、会话 token 归因与跨会话记忆缺口诊断。Runtime profiler for DeepSeek Harness.",
+  "version": "2.0.0",
+  "description": "DeepSeek Harness 运行时剖析器：启动耗时归因、工具延迟采样（P95）、会话 token 归因、CoreProtect 式文件变更回档。Runtime profiler + rewind for DeepSeek Harness.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

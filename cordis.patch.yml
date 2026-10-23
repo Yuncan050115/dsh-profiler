@@ -8,3 +8,6 @@
         slowToolMs: 3000
         sessionScanTtlMs: 60000
         http: true
+        rewind: true
+        rewindMaxEntries: 2000
+        rewindMaxFileKb: 512
