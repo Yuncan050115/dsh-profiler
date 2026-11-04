@@ -25,4 +25,7 @@ jobs:
       - name: Install
         run: npm install --no-audit --no-fund
       - name: Check
-        run: node test/smoke.mjs && node --check lib/index.js
+        run: |
+          node test/smoke.mjs
+          node test/edge.mjs
+          node --check lib/index.js

@@ -2,10 +2,45 @@
  * dsh-profiler smoke test — 不启动 DSH，用假 ctx 验证插件契约：
  *   register(tool) / register(command) / session/event 采样 / HTTP 路由 / 报告字段。
  * 运行：node test/smoke.mjs
+ *
+ * 报告里有两项是真的去读 ~/.dsh 的（会话存储、profile 插件清单）。CI 上没有本机
+ * 安装，所以先造一个临时 DSH_HOME 当夹具，再动态 import 插件 —— lib/index.js 在
+ * 模块顶层就把 DSH_HOME 固化了，静态 import 会先于夹具生效。这样断言测的是
+ * 「扫描逻辑对真实文件结构的解析」，而不是我这台机器的偶然状态。
  */
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import * as plugin from '../lib/index.js'
+import os from 'node:os'
+import path from 'node:path'
+
+const FIXTURE_HOME = path.join(os.tmpdir(), `dsh-profiler-fixture-${process.pid}`)
+const SESSION_DIR = path.join(FIXTURE_HOME, 'storages', 'session_projcache', 'sessions')
+const PROFILE_DIR = path.join(FIXTURE_HOME, 'profiles', 'acp')
+fs.mkdirSync(SESSION_DIR, { recursive: true })
+fs.mkdirSync(path.join(PROFILE_DIR, 'node_modules', '@deepseek-ai', 'dsh-core'), { recursive: true })
+
+// 会话文档：形状对齐 host 的 record/rows 存储，token 统计走 tokenUsage.val.totals
+fs.writeFileSync(path.join(SESSION_DIR, 'sess-fixture.json'), JSON.stringify({
+  record: {
+    identity: { id: 'sess-fixture', createdAt: 1730000000000 },
+    rows: {
+      title: { val: 'smoke fixture session' },
+      tokenUsage: { val: { totals: { uncachedInputTokens: 4000, cacheReadTokens: 6000, outputTokens: 1200 } } },
+    },
+  },
+}))
+// 故意再放一个损坏文件：扫描器要跳过它，而不是让整份报告崩掉
+fs.writeFileSync(path.join(SESSION_DIR, 'broken.json'), '{"record":{"rows"')
+fs.writeFileSync(path.join(PROFILE_DIR, 'package.json'), JSON.stringify({
+  name: 'dsh-profile-acp',
+  dsh: { profile: { bundles: ['@deepseek-ai/dsh-core', 'some-third-party-bundle'] } },
+  dependencies: { '@deepseek-ai/dsh-core': '0.2.1', 'some-third-party-bundle': '^1.0.0' },
+}))
+fs.writeFileSync(path.join(PROFILE_DIR, 'node_modules', '@deepseek-ai', 'dsh-core', 'package.json'),
+  JSON.stringify({ name: '@deepseek-ai/dsh-core', version: '0.2.1-rc.5', description: 'core' }))
+
+process.env.DSH_HOME = FIXTURE_HOME
+const plugin = await import('../lib/index.js')
 
 const tools = new Map()
 const commands = new Map()
@@ -82,15 +117,20 @@ assert.equal(res.statusCode, 200)
 const report = JSON.parse(res.body)
 assert.equal(report.version, '2.0.0')
 assert.ok(report.process.rssMb > 0)
-assert.ok(report.sessions.count >= 1, 'sessions should be scanned from ~/.dsh')
+assert.ok(report.sessions.count >= 1, 'sessions should be scanned from the fixture DSH_HOME')
+// 夹具里放了一个正常文档 + 一个损坏文档：count 只算解析成功的，损坏的那个必须被跳过
+assert.equal(report.sessions.count, 1, 'only the well-formed session should be counted')
+assert.equal(report.sessions.top[0].id, 'sess-fixture')
+// 6000 cacheRead / (6000 + 4000) uncachedInput = 60%
+assert.equal(report.sessions.cacheHitRate, 60, 'cache hit rate must come from the fixture totals')
 assert.equal(typeof report.sessions.cacheHitRate, 'number')
 assert.ok(Array.isArray(report.plugins.profiles) && report.plugins.profiles.length >= 1)
+assert.equal(report.plugins.profiles[0].profile, 'acp')
+assert.equal(report.plugins.thirdParty, 1, 'the fixture declares exactly one non-@deepseek-ai bundle')
 assert.ok(Array.isArray(report.findings) && report.findings.length >= 1)
 assert.ok(report.rewind && Array.isArray(report.rewind.recent), 'rewind summary must exist')
 
 // 回档：写前快照 → 修改 → restore 恢复
-import os from 'node:os'
-import path from 'node:path'
 const tmpFile = path.join(os.tmpdir(), `dsh-profiler-rewind-${Date.now()}.txt`)
 fs.writeFileSync(tmpFile, 'VERSION-OLD', 'utf8')
 emit(session, { type: 'tool/call', time: 2000, data: { callId: 'w1', name: 'write_file', args: { path: tmpFile, content: 'VERSION-NEW' } } })
@@ -140,14 +180,15 @@ assert.ok(htmlRes.body.includes('seriesChart') && htmlRes.body.includes('flame')
 
 disposers.forEach((d) => d())
 
-// 清理测试产生的回档历史条目，避免污染真实历史库
+// 清理夹具与测试产生的回档条目，避免污染真实历史库
 try {
-  const logFile = path.join(os.homedir(), '.dsh', 'dsh-profiler', 'rewind', 'history.jsonl')
+  const logFile = path.join(FIXTURE_HOME, 'dsh-profiler', 'rewind', 'history.jsonl')
   if (fs.existsSync(logFile)) {
     const keep = fs.readFileSync(logFile, 'utf8').split('\n').filter((l) => l && !l.includes('dsh-profiler-rewind-'))
     fs.writeFileSync(logFile, keep.length ? keep.join('\n') + '\n' : '', 'utf8')
   }
 } catch { /* noop */ }
+try { fs.rmSync(FIXTURE_HOME, { recursive: true, force: true }) } catch { /* noop */ }
 
 console.log('✓ dsh-profiler smoke test passed')
 console.log('  tool   : profiler_report')
